@@ -133,6 +133,9 @@
         .sensor-pitch-slider::-moz-range-thumb { background: #ff9f43; border: none; }
         .sensor-roll-slider::-moz-range-thumb { background: #26de81; border: none; }
 
+        .fov-slider::-webkit-slider-thumb { background: #f5cd79; }
+        .fov-slider::-moz-range-thumb { background: #f5cd79; border: none; }
+
         .matrix-display {
             font-family: 'Monaco', 'Consolas', monospace;
             font-size: 0.8rem;
@@ -234,6 +237,8 @@
         .sensor-axis-x { background: #ff9f43; }
         .sensor-axis-y { background: #a55eea; }
         .sensor-axis-z { background: #26de81; }
+
+        .fov-color { background: #f5cd79; }
 
         .legend-section-title {
             font-size: 0.65rem;
@@ -377,6 +382,58 @@
             </div>
 
             <div class="panel">
+                <h2>Sensor Field of View</h2>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="show-fov">
+                        Show FOV
+                    </label>
+                </div>
+                <div class="checkbox-divider"></div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Azimuth Min</span>
+                        <span class="slider-value" id="fov-az-min-value">-30.0°</span>
+                    </div>
+                    <input type="range" id="fov-az-min" class="fov-slider" min="-90" max="0" value="-30" step="1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Azimuth Max</span>
+                        <span class="slider-value" id="fov-az-max-value">30.0°</span>
+                    </div>
+                    <input type="range" id="fov-az-max" class="fov-slider" min="0" max="90" value="30" step="1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Elevation Min</span>
+                        <span class="slider-value" id="fov-el-min-value">-20.0°</span>
+                    </div>
+                    <input type="range" id="fov-el-min" class="fov-slider" min="-90" max="0" value="-20" step="1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Elevation Max</span>
+                        <span class="slider-value" id="fov-el-max-value">20.0°</span>
+                    </div>
+                    <input type="range" id="fov-el-max" class="fov-slider" min="0" max="90" value="20" step="1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Range</span>
+                        <span class="slider-value" id="fov-range-value">2.0</span>
+                    </div>
+                    <input type="range" id="fov-range" class="fov-slider" min="0.5" max="5.0" value="2.0" step="0.1">
+                </div>
+            </div>
+
+            <div class="panel">
                 <h2>Platform Rotation Matrix</h2>
                 <div class="matrix-brackets">
                     <span class="bracket">[</span>
@@ -461,6 +518,11 @@
                     <div class="axis-color sensor-axis-z"></div>
                     <span>Sensor Z</span>
                 </div>
+                <div class="legend-section-title">Field of View</div>
+                <div class="axis-legend-item">
+                    <div class="axis-color fov-color"></div>
+                    <span>FOV Volume</span>
+                </div>
             </div>
         </div>
     </div>
@@ -499,6 +561,19 @@
         const resetSensorBtn = document.getElementById('reset-sensor-btn');
         const rollStabilizationCheckbox = document.getElementById('roll-stabilization');
         const horizonPitchCheckbox = document.getElementById('horizon-pitch');
+
+        // DOM Elements - FOV
+        const showFovCheckbox = document.getElementById('show-fov');
+        const fovAzMinSlider = document.getElementById('fov-az-min');
+        const fovAzMaxSlider = document.getElementById('fov-az-max');
+        const fovElMinSlider = document.getElementById('fov-el-min');
+        const fovElMaxSlider = document.getElementById('fov-el-max');
+        const fovRangeSlider = document.getElementById('fov-range');
+        const fovAzMinValue = document.getElementById('fov-az-min-value');
+        const fovAzMaxValue = document.getElementById('fov-az-max-value');
+        const fovElMinValue = document.getElementById('fov-el-min-value');
+        const fovElMaxValue = document.getElementById('fov-el-max-value');
+        const fovRangeValue = document.getElementById('fov-range-value');
 
         // Three.js setup
         const scene = new THREE.Scene();
@@ -648,6 +723,168 @@
         const gridHelper = new THREE.GridHelper(6, 12, 0x333355, 0x222244);
         // GridHelper is on XZ plane by default, no rotation needed for our NED mapping
         scene.add(gridHelper);
+
+        // FOV materials
+        const fovMaterial = new THREE.MeshBasicMaterial({
+            color: 0xf7d794,
+            transparent: true,
+            opacity: 0.15,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+
+        const fovEdgeMaterial = new THREE.LineBasicMaterial({
+            color: 0xf5cd79,
+            transparent: true,
+            opacity: 0.6
+        });
+
+        // FOV mesh and edges (will be added to sensorFrame)
+        let fovMesh = null;
+        let fovEdges = null;
+
+        // Compute FOV corner in Three.js coordinates from azimuth/elevation/range
+        function computeFOVCornerThreeJS(azimuth, elevation, range) {
+            // Compute in NED: X=forward, Y=right, Z=down
+            const cosEl = Math.cos(elevation);
+            const sinEl = Math.sin(elevation);
+            const cosAz = Math.cos(azimuth);
+            const sinAz = Math.sin(azimuth);
+
+            const nedX = range * cosEl * cosAz;
+            const nedY = range * cosEl * sinAz;
+            const nedZ = range * sinEl;
+
+            // NED to Three.js: TJS_X=NED_Y, TJS_Y=-NED_Z, TJS_Z=-NED_X
+            return new THREE.Vector3(nedY, -nedZ, -nedX);
+        }
+
+        // Create FOV geometry as a 5-faced pyramid
+        function createFOVGeometry(azMin, azMax, elMin, elMax, range) {
+            // Compute 4 corners at the specified range
+            const topLeft = computeFOVCornerThreeJS(azMin, elMin, range);     // min az, min el (top-left when viewed from behind)
+            const topRight = computeFOVCornerThreeJS(azMax, elMin, range);    // max az, min el (top-right)
+            const bottomLeft = computeFOVCornerThreeJS(azMin, elMax, range);  // min az, max el (bottom-left)
+            const bottomRight = computeFOVCornerThreeJS(azMax, elMax, range); // max az, max el (bottom-right)
+            const apex = new THREE.Vector3(0, 0, 0); // Origin (sensor position)
+
+            // Create buffer geometry with 6 triangles (4 side faces + 2 for quad cap)
+            const geometry = new THREE.BufferGeometry();
+
+            const vertices = new Float32Array([
+                // Side face 1: apex, topLeft, topRight
+                apex.x, apex.y, apex.z,
+                topLeft.x, topLeft.y, topLeft.z,
+                topRight.x, topRight.y, topRight.z,
+
+                // Side face 2: apex, topRight, bottomRight
+                apex.x, apex.y, apex.z,
+                topRight.x, topRight.y, topRight.z,
+                bottomRight.x, bottomRight.y, bottomRight.z,
+
+                // Side face 3: apex, bottomRight, bottomLeft
+                apex.x, apex.y, apex.z,
+                bottomRight.x, bottomRight.y, bottomRight.z,
+                bottomLeft.x, bottomLeft.y, bottomLeft.z,
+
+                // Side face 4: apex, bottomLeft, topLeft
+                apex.x, apex.y, apex.z,
+                bottomLeft.x, bottomLeft.y, bottomLeft.z,
+                topLeft.x, topLeft.y, topLeft.z,
+
+                // Cap face (quad as 2 triangles): topLeft, bottomLeft, bottomRight
+                topLeft.x, topLeft.y, topLeft.z,
+                bottomLeft.x, bottomLeft.y, bottomLeft.z,
+                bottomRight.x, bottomRight.y, bottomRight.z,
+
+                // Cap face 2: topLeft, bottomRight, topRight
+                topLeft.x, topLeft.y, topLeft.z,
+                bottomRight.x, bottomRight.y, bottomRight.z,
+                topRight.x, topRight.y, topRight.z
+            ]);
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            geometry.computeVertexNormals();
+
+            // Create edge geometry for wireframe
+            const edgeVertices = new Float32Array([
+                // 4 edges from apex to corners
+                apex.x, apex.y, apex.z,
+                topLeft.x, topLeft.y, topLeft.z,
+
+                apex.x, apex.y, apex.z,
+                topRight.x, topRight.y, topRight.z,
+
+                apex.x, apex.y, apex.z,
+                bottomLeft.x, bottomLeft.y, bottomLeft.z,
+
+                apex.x, apex.y, apex.z,
+                bottomRight.x, bottomRight.y, bottomRight.z,
+
+                // 4 edges of the cap rectangle
+                topLeft.x, topLeft.y, topLeft.z,
+                topRight.x, topRight.y, topRight.z,
+
+                topRight.x, topRight.y, topRight.z,
+                bottomRight.x, bottomRight.y, bottomRight.z,
+
+                bottomRight.x, bottomRight.y, bottomRight.z,
+                bottomLeft.x, bottomLeft.y, bottomLeft.z,
+
+                bottomLeft.x, bottomLeft.y, bottomLeft.z,
+                topLeft.x, topLeft.y, topLeft.z
+            ]);
+
+            const edgeGeometry = new THREE.BufferGeometry();
+            edgeGeometry.setAttribute('position', new THREE.BufferAttribute(edgeVertices, 3));
+
+            return { geometry, edgeGeometry };
+        }
+
+        // Update FOV visualization
+        function updateFOV() {
+            // Update value displays (always, regardless of checkbox)
+            fovAzMinValue.textContent = `${parseFloat(fovAzMinSlider.value).toFixed(1)}°`;
+            fovAzMaxValue.textContent = `${parseFloat(fovAzMaxSlider.value).toFixed(1)}°`;
+            fovElMinValue.textContent = `${parseFloat(fovElMinSlider.value).toFixed(1)}°`;
+            fovElMaxValue.textContent = `${parseFloat(fovElMaxSlider.value).toFixed(1)}°`;
+            fovRangeValue.textContent = parseFloat(fovRangeSlider.value).toFixed(1);
+
+            // Remove existing FOV mesh and edges
+            if (fovMesh) {
+                sensorFrame.remove(fovMesh);
+                fovMesh.geometry.dispose();
+                fovMesh = null;
+            }
+            if (fovEdges) {
+                sensorFrame.remove(fovEdges);
+                fovEdges.geometry.dispose();
+                fovEdges = null;
+            }
+
+            // Only show if checkbox is checked
+            if (!showFovCheckbox.checked) {
+                return;
+            }
+
+            // Get FOV parameters
+            const azMin = degToRad(parseFloat(fovAzMinSlider.value));
+            const azMax = degToRad(parseFloat(fovAzMaxSlider.value));
+            const elMin = degToRad(parseFloat(fovElMinSlider.value));
+            const elMax = degToRad(parseFloat(fovElMaxSlider.value));
+            const range = parseFloat(fovRangeSlider.value);
+
+            // Create geometry
+            const { geometry, edgeGeometry } = createFOVGeometry(azMin, azMax, elMin, elMax, range);
+
+            // Create mesh and edges
+            fovMesh = new THREE.Mesh(geometry, fovMaterial);
+            fovEdges = new THREE.LineSegments(edgeGeometry, fovEdgeMaterial);
+
+            // Add to sensor frame so it rotates with sensor
+            sensorFrame.add(fovMesh);
+            sensorFrame.add(fovEdges);
+        }
 
         // Euler to rotation matrix (ported from Python)
         // Convention: Tait-Bryan Z-Y-X (yaw-pitch-roll), intrinsic, active
@@ -827,6 +1064,14 @@
             updateVisualization();
         });
 
+        // Event listeners - FOV
+        showFovCheckbox.addEventListener('change', updateFOV);
+        fovAzMinSlider.addEventListener('input', updateFOV);
+        fovAzMaxSlider.addEventListener('input', updateFOV);
+        fovElMinSlider.addEventListener('input', updateFOV);
+        fovElMaxSlider.addEventListener('input', updateFOV);
+        fovRangeSlider.addEventListener('input', updateFOV);
+
         // Handle window resize
         function onWindowResize() {
             const container = canvas.parentElement;
@@ -849,6 +1094,7 @@
 
         // Initialize
         updateVisualization();
+        updateFOV();
         onWindowResize();
         animate();
     </script>
