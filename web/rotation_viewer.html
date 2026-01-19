@@ -136,6 +136,9 @@
         .fov-slider::-webkit-slider-thumb { background: #f5cd79; }
         .fov-slider::-moz-range-thumb { background: #f5cd79; border: none; }
 
+        .point-slider::-webkit-slider-thumb { background: #00d9ff; }
+        .point-slider::-moz-range-thumb { background: #00d9ff; border: none; }
+
         .matrix-display {
             font-family: 'Monaco', 'Consolas', monospace;
             font-size: 0.8rem;
@@ -239,6 +242,48 @@
         .sensor-axis-z { background: #26de81; }
 
         .fov-color { background: #f5cd79; }
+
+        .point-color { background: #00d9ff; }
+
+        .coord-display {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.75rem;
+            line-height: 1.6;
+        }
+
+        .coord-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+        }
+
+        .coord-label {
+            color: #888;
+        }
+
+        .coord-value {
+            color: #7ec8e3;
+        }
+
+        .coord-section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #666;
+            margin-top: 0.75rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .coord-section-title:first-child {
+            margin-top: 0;
+        }
+
+        .in-fov-yes {
+            color: #26de81;
+        }
+
+        .in-fov-no {
+            color: #ff6b6b;
+        }
 
         .legend-section-title {
             font-size: 0.65rem;
@@ -434,6 +479,78 @@
             </div>
 
             <div class="panel">
+                <h2>World Point</h2>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="show-point">
+                        Show Point
+                    </label>
+                </div>
+                <div class="checkbox-divider"></div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>North (X)</span>
+                        <span class="slider-value" id="point-x-value">2.0</span>
+                    </div>
+                    <input type="range" id="point-x" class="point-slider" min="-5.0" max="5.0" value="2.0" step="0.1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>East (Y)</span>
+                        <span class="slider-value" id="point-y-value">0.0</span>
+                    </div>
+                    <input type="range" id="point-y" class="point-slider" min="-5.0" max="5.0" value="0.0" step="0.1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Down (Z)</span>
+                        <span class="slider-value" id="point-z-value">0.0</span>
+                    </div>
+                    <input type="range" id="point-z" class="point-slider" min="-5.0" max="5.0" value="0.0" step="0.1">
+                </div>
+            </div>
+
+            <div class="panel" id="point-coords-panel" style="display: none;">
+                <h2>Point Coordinates</h2>
+                <div class="coord-display">
+                    <div class="coord-row">
+                        <span class="coord-label">World NED:</span>
+                        <span class="coord-value" id="coord-world"></span>
+                    </div>
+                    <div class="coord-row">
+                        <span class="coord-label">Body Frame:</span>
+                        <span class="coord-value" id="coord-body"></span>
+                    </div>
+                    <div class="coord-row">
+                        <span class="coord-label">Sensor Frame:</span>
+                        <span class="coord-value" id="coord-sensor"></span>
+                    </div>
+
+                    <div class="coord-section-title">Sensor View</div>
+                    <div class="coord-row">
+                        <span class="coord-label">Azimuth:</span>
+                        <span class="coord-value" id="coord-azimuth"></span>
+                    </div>
+                    <div class="coord-row">
+                        <span class="coord-label">Elevation:</span>
+                        <span class="coord-value" id="coord-elevation"></span>
+                    </div>
+                    <div class="coord-row">
+                        <span class="coord-label">Range:</span>
+                        <span class="coord-value" id="coord-range"></span>
+                    </div>
+                    <div class="coord-row">
+                        <span class="coord-label">In FOV:</span>
+                        <span class="coord-value" id="coord-in-fov"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
                 <h2>Platform Rotation Matrix</h2>
                 <div class="matrix-brackets">
                     <span class="bracket">[</span>
@@ -523,6 +640,11 @@
                     <div class="axis-color fov-color"></div>
                     <span>FOV Volume</span>
                 </div>
+                <div class="legend-section-title">World Point</div>
+                <div class="axis-legend-item">
+                    <div class="axis-color point-color"></div>
+                    <span>Target Point</span>
+                </div>
             </div>
         </div>
     </div>
@@ -574,6 +696,23 @@
         const fovElMinValue = document.getElementById('fov-el-min-value');
         const fovElMaxValue = document.getElementById('fov-el-max-value');
         const fovRangeValue = document.getElementById('fov-range-value');
+
+        // DOM Elements - World Point
+        const showPointCheckbox = document.getElementById('show-point');
+        const pointXSlider = document.getElementById('point-x');
+        const pointYSlider = document.getElementById('point-y');
+        const pointZSlider = document.getElementById('point-z');
+        const pointXValue = document.getElementById('point-x-value');
+        const pointYValue = document.getElementById('point-y-value');
+        const pointZValue = document.getElementById('point-z-value');
+        const pointCoordsPanel = document.getElementById('point-coords-panel');
+        const coordWorld = document.getElementById('coord-world');
+        const coordBody = document.getElementById('coord-body');
+        const coordSensor = document.getElementById('coord-sensor');
+        const coordAzimuth = document.getElementById('coord-azimuth');
+        const coordElevation = document.getElementById('coord-elevation');
+        const coordRange = document.getElementById('coord-range');
+        const coordInFov = document.getElementById('coord-in-fov');
 
         // Three.js setup
         const scene = new THREE.Scene();
@@ -743,6 +882,18 @@
         let fovMesh = null;
         let fovEdges = null;
 
+        // World point sphere
+        const pointGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+        const pointMaterialInFov = new THREE.MeshBasicMaterial({ color: 0x00d9ff });
+        const pointMaterialOutFov = new THREE.MeshBasicMaterial({ color: 0x00d9ff, transparent: true, opacity: 0.4 });
+        const worldPointSphere = new THREE.Mesh(pointGeometry, pointMaterialInFov);
+        worldPointSphere.visible = false;
+        scene.add(worldPointSphere);
+
+        // Store current rotation matrices for point calculation (updated by updateVisualization)
+        let currentR_platform = [[1,0,0], [0,1,0], [0,0,1]];
+        let currentR_sensor_world = [[1,0,0], [0,1,0], [0,0,1]];
+
         // Compute FOV corner in Three.js coordinates from azimuth/elevation/range
         function computeFOVCornerThreeJS(azimuth, elevation, range) {
             // Compute in NED: X=forward, Y=right, Z=down
@@ -886,6 +1037,80 @@
             sensorFrame.add(fovEdges);
         }
 
+        // Update world point visualization
+        function updateWorldPoint() {
+            // Update slider value displays
+            pointXValue.textContent = parseFloat(pointXSlider.value).toFixed(1);
+            pointYValue.textContent = parseFloat(pointYSlider.value).toFixed(1);
+            pointZValue.textContent = parseFloat(pointZSlider.value).toFixed(1);
+
+            const showPoint = showPointCheckbox.checked;
+            worldPointSphere.visible = showPoint;
+            pointCoordsPanel.style.display = showPoint ? 'block' : 'none';
+
+            if (!showPoint) {
+                return;
+            }
+
+            // Get world NED coordinates
+            const P_world = [
+                parseFloat(pointXSlider.value),
+                parseFloat(pointYSlider.value),
+                parseFloat(pointZSlider.value)
+            ];
+
+            // Transform to body frame: P_body = R_platform^T * P_world
+            const R_platform_T = transposeMatrix3(currentR_platform);
+            const P_body = transformPointByMatrix(P_world, R_platform_T);
+
+            // Transform to sensor frame: P_sensor = R_sensor_world^T * P_world
+            const R_sensor_world_T = transposeMatrix3(currentR_sensor_world);
+            const P_sensor = transformPointByMatrix(P_world, R_sensor_world_T);
+
+            // Compute spherical coordinates in sensor frame
+            const spherical = computeSphericalCoords(P_sensor);
+            const azimuthDeg = spherical.azimuth * 180 / Math.PI;
+            const elevationDeg = spherical.elevation * 180 / Math.PI;
+
+            // Check FOV containment (only meaningful if point is in front of sensor)
+            const inFront = P_sensor[0] > 0;
+            const inFOV = inFront && showFovCheckbox.checked &&
+                          checkFOVContainment(spherical.azimuth, spherical.elevation, spherical.range);
+
+            // Update coordinate display
+            coordWorld.textContent = `[${formatNumber(P_world[0])}, ${formatNumber(P_world[1])}, ${formatNumber(P_world[2])}]`;
+            coordBody.textContent = `[${formatNumber(P_body[0])}, ${formatNumber(P_body[1])}, ${formatNumber(P_body[2])}]`;
+            coordSensor.textContent = `[${formatNumber(P_sensor[0])}, ${formatNumber(P_sensor[1])}, ${formatNumber(P_sensor[2])}]`;
+            coordAzimuth.textContent = `${azimuthDeg.toFixed(1)}°`;
+            coordElevation.textContent = `${elevationDeg.toFixed(1)}°`;
+            coordRange.textContent = spherical.range.toFixed(3);
+
+            if (!showFovCheckbox.checked) {
+                coordInFov.textContent = 'N/A';
+                coordInFov.className = 'coord-value';
+            } else if (!inFront) {
+                coordInFov.textContent = 'Behind';
+                coordInFov.className = 'coord-value in-fov-no';
+            } else if (inFOV) {
+                coordInFov.textContent = 'Yes ✓';
+                coordInFov.className = 'coord-value in-fov-yes';
+            } else {
+                coordInFov.textContent = 'No';
+                coordInFov.className = 'coord-value in-fov-no';
+            }
+
+            // Update sphere position (convert NED to Three.js)
+            // NED to Three.js: TJS_X=NED_Y, TJS_Y=-NED_Z, TJS_Z=-NED_X
+            worldPointSphere.position.set(P_world[1], -P_world[2], -P_world[0]);
+
+            // Update sphere material based on FOV containment
+            if (inFOV) {
+                worldPointSphere.material = pointMaterialInFov;
+            } else {
+                worldPointSphere.material = pointMaterialOutFov;
+            }
+        }
+
         // Euler to rotation matrix (ported from Python)
         // Convention: Tait-Bryan Z-Y-X (yaw-pitch-roll), intrinsic, active
         // R = Rz(yaw) * Ry(pitch) * Rx(roll)
@@ -926,6 +1151,48 @@
         // Format number for display
         function formatNumber(n) {
             return n.toFixed(3).replace(/^-0\.000$/, '0.000');
+        }
+
+        // Transpose a 3x3 matrix
+        function transposeMatrix3(R) {
+            return [
+                [R[0][0], R[1][0], R[2][0]],
+                [R[0][1], R[1][1], R[2][1]],
+                [R[0][2], R[1][2], R[2][2]]
+            ];
+        }
+
+        // Transform a 3D point by a rotation matrix
+        function transformPointByMatrix(P, R) {
+            return [
+                R[0][0] * P[0] + R[0][1] * P[1] + R[0][2] * P[2],
+                R[1][0] * P[0] + R[1][1] * P[1] + R[1][2] * P[2],
+                R[2][0] * P[0] + R[2][1] * P[1] + R[2][2] * P[2]
+            ];
+        }
+
+        // Compute spherical coordinates in sensor frame (NED convention)
+        // Returns azimuth (positive=right), elevation (positive=down), range
+        function computeSphericalCoords(P) {
+            const x = P[0], y = P[1], z = P[2];
+            const range = Math.sqrt(x * x + y * y + z * z);
+            const azimuth = Math.atan2(y, x);
+            const groundRange = Math.sqrt(x * x + y * y);
+            const elevation = Math.atan2(z, groundRange);
+            return { azimuth, elevation, range };
+        }
+
+        // Check if spherical coords are within FOV bounds
+        function checkFOVContainment(az, el, range) {
+            const azMin = degToRad(parseFloat(fovAzMinSlider.value));
+            const azMax = degToRad(parseFloat(fovAzMaxSlider.value));
+            const elMin = degToRad(parseFloat(fovElMinSlider.value));
+            const elMax = degToRad(parseFloat(fovElMaxSlider.value));
+            const fovRange = parseFloat(fovRangeSlider.value);
+
+            return (az >= azMin && az <= azMax &&
+                    el >= elMin && el <= elMax &&
+                    range <= fovRange);
         }
 
         // Update platform rotation matrix display
@@ -983,6 +1250,7 @@
             // Calculate platform rotation matrix in NED frame
             const R_platform = eulerToMatrix(roll, pitch, yaw);
             updateMatrixDisplay(R_platform);
+            currentR_platform = R_platform;
 
             // Calculate sensor-relative rotation matrix (platform to sensor)
             const R_sensor_rel = eulerToMatrix(sensorRoll, sensorPitch, sensorYaw);
@@ -1013,6 +1281,7 @@
 
             // Calculate combined sensor world rotation: R_sensor_world = R_platform_contrib * R_sensor_rel
             const R_sensor_world = matmul3(R_platform_contrib, R_sensor_rel);
+            currentR_sensor_world = R_sensor_world;
 
             // Transform rotations to Three.js display coordinates
             const T = T_ned_to_tjs;
@@ -1036,6 +1305,9 @@
             } else {
                 gimbalWarning.classList.remove('visible');
             }
+
+            // Update world point (depends on rotation matrices)
+            updateWorldPoint();
         }
 
         // Event listeners - Platform
@@ -1065,12 +1337,18 @@
         });
 
         // Event listeners - FOV
-        showFovCheckbox.addEventListener('change', updateFOV);
-        fovAzMinSlider.addEventListener('input', updateFOV);
-        fovAzMaxSlider.addEventListener('input', updateFOV);
-        fovElMinSlider.addEventListener('input', updateFOV);
-        fovElMaxSlider.addEventListener('input', updateFOV);
-        fovRangeSlider.addEventListener('input', updateFOV);
+        showFovCheckbox.addEventListener('change', () => { updateFOV(); updateWorldPoint(); });
+        fovAzMinSlider.addEventListener('input', () => { updateFOV(); updateWorldPoint(); });
+        fovAzMaxSlider.addEventListener('input', () => { updateFOV(); updateWorldPoint(); });
+        fovElMinSlider.addEventListener('input', () => { updateFOV(); updateWorldPoint(); });
+        fovElMaxSlider.addEventListener('input', () => { updateFOV(); updateWorldPoint(); });
+        fovRangeSlider.addEventListener('input', () => { updateFOV(); updateWorldPoint(); });
+
+        // Event listeners - World Point
+        showPointCheckbox.addEventListener('change', updateWorldPoint);
+        pointXSlider.addEventListener('input', updateWorldPoint);
+        pointYSlider.addEventListener('input', updateWorldPoint);
+        pointZSlider.addEventListener('input', updateWorldPoint);
 
         // Handle window resize
         function onWindowResize() {
@@ -1095,6 +1373,7 @@
         // Initialize
         updateVisualization();
         updateFOV();
+        updateWorldPoint();
         onWindowResize();
         animate();
     </script>
