@@ -320,15 +320,15 @@
             <div class="axis-legend">
                 <div class="axis-legend-item">
                     <div class="axis-color axis-x"></div>
-                    <span>X (Roll)</span>
+                    <span>X North (Roll)</span>
                 </div>
                 <div class="axis-legend-item">
                     <div class="axis-color axis-y"></div>
-                    <span>Y (Pitch)</span>
+                    <span>Y East (Pitch)</span>
                 </div>
                 <div class="axis-legend-item">
                     <div class="axis-color axis-z"></div>
-                    <span>Z (Yaw)</span>
+                    <span>Z Down (Yaw)</span>
                 </div>
             </div>
         </div>
@@ -368,7 +368,8 @@
             0.1,
             1000
         );
-        camera.position.set(4, 3, 4);
+        // Position camera for NED view: above and behind, looking at origin
+        camera.position.set(3, 4, 5);
         camera.lookAt(0, 0, 0);
 
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -392,10 +393,35 @@
 
         // Colors
         const colors = {
-            x: 0xff6b6b,  // Red
-            y: 0x4ecdc4,  // Green/Cyan
-            z: 0x5b8dee   // Blue
+            x: 0xff6b6b,  // Red - X/North
+            y: 0x4ecdc4,  // Cyan - Y/East
+            z: 0x5b8dee   // Blue - Z/Down
         };
+
+        // NED to Three.js coordinate transform
+        // NED: X=North(forward), Y=East(right), Z=Down
+        // Three.js: X=right, Y=up, Z=toward camera
+        // Mapping: NED X -> TJS -Z (forward into scene)
+        //          NED Y -> TJS +X (right)
+        //          NED Z -> TJS -Y (down)
+        const T_ned_to_tjs = [
+            [0,  1,  0],   // TJS X = NED Y
+            [0,  0, -1],   // TJS Y = -NED Z
+            [-1, 0,  0]    // TJS Z = -NED X
+        ];
+
+        // Matrix multiplication for 3x3 matrices
+        function matmul3(A, B) {
+            const result = [[0,0,0], [0,0,0], [0,0,0]];
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    for (let k = 0; k < 3; k++) {
+                        result[i][j] += A[i][k] * B[k][j];
+                    }
+                }
+            }
+            return result;
+        }
 
         // Create arrow helper for axis
         function createAxis(dir, color, length = 2) {
@@ -410,13 +436,17 @@
             return arrow;
         }
 
-        // Create coordinate frame group
-        function createCoordinateFrame(opacity = 1) {
+        // Create coordinate frame in NED orientation (mapped to Three.js display coords)
+        function createNEDFrame(opacity = 1) {
             const group = new THREE.Group();
 
-            const xAxis = createAxis(new THREE.Vector3(1, 0, 0), colors.x);
-            const yAxis = createAxis(new THREE.Vector3(0, 1, 0), colors.y);
-            const zAxis = createAxis(new THREE.Vector3(0, 0, 1), colors.z);
+            // NED axes mapped to Three.js display coordinates
+            // NED X (North) -> TJS (0, 0, -1)
+            // NED Y (East)  -> TJS (1, 0, 0)
+            // NED Z (Down)  -> TJS (0, -1, 0)
+            const xAxis = createAxis(new THREE.Vector3(0, 0, -1), colors.x);  // North - forward
+            const yAxis = createAxis(new THREE.Vector3(1, 0, 0), colors.y);   // East - right
+            const zAxis = createAxis(new THREE.Vector3(0, -1, 0), colors.z);  // Down
 
             if (opacity < 1) {
                 [xAxis, yAxis, zAxis].forEach(arrow => {
@@ -431,21 +461,22 @@
             return group;
         }
 
-        // Reference frame (semi-transparent, static)
-        const referenceFrame = createCoordinateFrame(0.2);
+        // Reference frame (semi-transparent, static) - shows NED orientation
+        const referenceFrame = createNEDFrame(0.25);
         scene.add(referenceFrame);
 
-        // Rotating frame
-        const rotatingFrame = createCoordinateFrame(1);
+        // Rotating frame - will be updated with rotation matrix
+        const rotatingFrame = createNEDFrame(1);
         scene.add(rotatingFrame);
 
-        // Grid helper
+        // Grid helper - horizontal plane (XY in NED = ground)
         const gridHelper = new THREE.GridHelper(6, 12, 0x333355, 0x222244);
-        gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane
+        // GridHelper is on XZ plane by default, no rotation needed for our NED mapping
         scene.add(gridHelper);
 
         // Euler to rotation matrix (ported from Python)
         // Convention: Tait-Bryan Z-Y-X (yaw-pitch-roll), intrinsic, active
+        // R = Rz(yaw) * Ry(pitch) * Rx(roll)
         function eulerToMatrix(roll, pitch, yaw) {
             const cu = Math.cos(roll), su = Math.sin(roll);
             const cv = Math.cos(pitch), sv = Math.sin(pitch);
@@ -456,6 +487,18 @@
                 [cv*sw, cu*cw + su*sv*sw, cu*sv*sw - su*cw],
                 [-sv,   su*cv,            cu*cv           ]
             ];
+        }
+
+        // Apply rotation matrix to Three.js object
+        function applyRotationMatrix(object, R) {
+            const m = new THREE.Matrix4();
+            m.set(
+                R[0][0], R[0][1], R[0][2], 0,
+                R[1][0], R[1][1], R[1][2], 0,
+                R[2][0], R[2][1], R[2][2], 0,
+                0, 0, 0, 1
+            );
+            object.setRotationFromMatrix(m);
         }
 
         // Check for gimbal lock
@@ -499,13 +542,22 @@
             const pitch = degToRad(pitchDeg);
             const roll = degToRad(rollDeg);
 
-            // Calculate and display rotation matrix
-            const matrix = eulerToMatrix(roll, pitch, yaw);
-            updateMatrixDisplay(matrix);
+            // Calculate rotation matrix in NED frame
+            const R_ned = eulerToMatrix(roll, pitch, yaw);
+            updateMatrixDisplay(R_ned);
 
-            // Apply rotation to Three.js object
-            // Three.js Euler uses intrinsic rotations, 'ZYX' order means Z first, then Y, then X
-            rotatingFrame.rotation.set(roll, pitch, yaw, 'ZYX');
+            // Transform rotation to Three.js display coordinates
+            // R_visual = T * R_ned * T^(-1) for proper coordinate transformation
+            // But since we drew the frame in NED-mapped coords, we apply R_ned directly
+            // transformed through the coordinate mapping
+            const T = T_ned_to_tjs;
+            const T_inv = [
+                [0, 0, -1],
+                [1, 0,  0],
+                [0, -1, 0]
+            ];
+            const R_visual = matmul3(matmul3(T, R_ned), T_inv);
+            applyRotationMatrix(rotatingFrame, R_visual);
 
             // Check for gimbal lock
             if (isGimbalLocked(pitchDeg)) {
