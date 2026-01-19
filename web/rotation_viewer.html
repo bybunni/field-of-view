@@ -268,6 +268,30 @@
             color: #666;
             margin-top: 0.5rem;
         }
+
+        .checkbox-group {
+            margin-bottom: 0.75rem;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #7ec8e3;
+            cursor: pointer;
+        }
+
+        .checkbox-divider {
+            border-top: 1px solid #0f3460;
+            margin: 0.75rem 0;
+        }
     </style>
 </head>
 <body>
@@ -310,6 +334,20 @@
 
             <div class="panel">
                 <h2>Sensor Orientation</h2>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="roll-stabilization">
+                        Roll Stabilization
+                    </label>
+                </div>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="horizon-pitch">
+                        Horizon-Relative Pitch
+                    </label>
+                </div>
+                <div class="checkbox-divider"></div>
 
                 <div class="slider-group">
                     <div class="slider-label">
@@ -459,6 +497,8 @@
         const sensorPitchValue = document.getElementById('sensor-pitch-value');
         const sensorRollValue = document.getElementById('sensor-roll-value');
         const resetSensorBtn = document.getElementById('reset-sensor-btn');
+        const rollStabilizationCheckbox = document.getElementById('roll-stabilization');
+        const horizonPitchCheckbox = document.getElementById('horizon-pitch');
 
         // Three.js setup
         const scene = new THREE.Scene();
@@ -711,8 +751,31 @@
             const R_sensor_rel = eulerToMatrix(sensorRoll, sensorPitch, sensorYaw);
             updateSensorMatrixDisplay(R_sensor_rel);
 
-            // Calculate combined sensor world rotation: R_sensor_world = R_platform * R_sensor_rel
-            const R_sensor_world = matmul3(R_platform, R_sensor_rel);
+            // Get stabilization flags
+            const rollStab = rollStabilizationCheckbox.checked;
+            const horizonPitchStab = horizonPitchCheckbox.checked;
+
+            // Build platform contribution based on stabilization settings
+            let R_platform_contrib;
+            if (rollStab && horizonPitchStab) {
+                // Only yaw affects sensor
+                R_platform_contrib = eulerToMatrix(0, 0, yaw);
+            } else if (rollStab) {
+                // Yaw and pitch affect sensor (no roll)
+                R_platform_contrib = eulerToMatrix(0, pitch, yaw);
+            } else if (horizonPitchStab) {
+                // Yaw and roll affect sensor (no pitch)
+                R_platform_contrib = matmul3(
+                    eulerToMatrix(0, 0, yaw),
+                    eulerToMatrix(roll, 0, 0)
+                );
+            } else {
+                // Full platform rotation (current behavior)
+                R_platform_contrib = R_platform;
+            }
+
+            // Calculate combined sensor world rotation: R_sensor_world = R_platform_contrib * R_sensor_rel
+            const R_sensor_world = matmul3(R_platform_contrib, R_sensor_rel);
 
             // Transform rotations to Three.js display coordinates
             const T = T_ned_to_tjs;
@@ -754,6 +817,8 @@
         sensorYawSlider.addEventListener('input', updateVisualization);
         sensorPitchSlider.addEventListener('input', updateVisualization);
         sensorRollSlider.addEventListener('input', updateVisualization);
+        rollStabilizationCheckbox.addEventListener('change', updateVisualization);
+        horizonPitchCheckbox.addEventListener('change', updateVisualization);
 
         resetSensorBtn.addEventListener('click', () => {
             sensorYawSlider.value = 0;
