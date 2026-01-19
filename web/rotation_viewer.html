@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Rotation Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #16213e;
+            padding: 1rem 2rem;
+            text-align: center;
+            border-bottom: 2px solid #0f3460;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 60px);
+            padding: 1rem;
+            gap: 1rem;
+        }
+
+        .sidebar {
+            width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            flex-shrink: 0;
+        }
+
+        .panel {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid #0f3460;
+        }
+
+        .panel h2 {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888;
+            margin-bottom: 1rem;
+        }
+
+        .slider-group {
+            margin-bottom: 1rem;
+        }
+
+        .slider-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .slider-label span:first-child {
+            font-weight: 500;
+        }
+
+        .slider-value {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.875rem;
+            color: #7ec8e3;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #0f3460;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #7ec8e3;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #a8d8ea;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #7ec8e3;
+            cursor: pointer;
+            border: none;
+        }
+
+        .yaw-slider::-webkit-slider-thumb { background: #5b8dee; }
+        .pitch-slider::-webkit-slider-thumb { background: #4ecdc4; }
+        .roll-slider::-webkit-slider-thumb { background: #ff6b6b; }
+
+        .matrix-display {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.8rem;
+        }
+
+        .matrix-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+        }
+
+        .matrix-cell {
+            width: 70px;
+            text-align: right;
+            color: #7ec8e3;
+        }
+
+        .matrix-brackets {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .bracket {
+            font-size: 3rem;
+            color: #444;
+            line-height: 1;
+        }
+
+        .gimbal-warning {
+            background: #ff6b6b22;
+            border: 1px solid #ff6b6b;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .gimbal-warning.visible {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .gimbal-warning-icon {
+            font-size: 1.25rem;
+        }
+
+        .gimbal-warning-text {
+            font-size: 0.8rem;
+            color: #ff6b6b;
+        }
+
+        .canvas-container {
+            flex: 1;
+            background: #0d1b2a;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .axis-legend {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background: rgba(22, 33, 62, 0.9);
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+        }
+
+        .axis-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .axis-legend-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .axis-color {
+            width: 12px;
+            height: 3px;
+            border-radius: 1px;
+        }
+
+        .axis-x { background: #ff6b6b; }
+        .axis-y { background: #4ecdc4; }
+        .axis-z { background: #5b8dee; }
+
+        .reset-btn {
+            background: #0f3460;
+            border: 1px solid #1a4b8c;
+            color: #7ec8e3;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            width: 100%;
+            transition: background 0.15s;
+        }
+
+        .reset-btn:hover {
+            background: #1a4b8c;
+        }
+
+        .info-text {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>3D Rotation Visualizer</h1>
+    </header>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="panel">
+                <h2>Controls</h2>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Yaw (Z)</span>
+                        <span class="slider-value" id="yaw-value">0.0°</span>
+                    </div>
+                    <input type="range" id="yaw" class="yaw-slider" min="-180" max="180" value="0" step="0.1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Pitch (Y)</span>
+                        <span class="slider-value" id="pitch-value">0.0°</span>
+                    </div>
+                    <input type="range" id="pitch" class="pitch-slider" min="-90" max="90" value="0" step="0.1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Roll (X)</span>
+                        <span class="slider-value" id="roll-value">0.0°</span>
+                    </div>
+                    <input type="range" id="roll" class="roll-slider" min="-180" max="180" value="0" step="0.1">
+                </div>
+
+                <button class="reset-btn" id="reset-btn">Reset to Origin</button>
+                <p class="info-text">Drag canvas to orbit camera</p>
+            </div>
+
+            <div class="panel">
+                <h2>Rotation Matrix</h2>
+                <div class="matrix-brackets">
+                    <span class="bracket">[</span>
+                    <div class="matrix-display" id="matrix-display">
+                        <div class="matrix-row">
+                            <span class="matrix-cell" id="m00">1.000</span>
+                            <span class="matrix-cell" id="m01">0.000</span>
+                            <span class="matrix-cell" id="m02">0.000</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-cell" id="m10">0.000</span>
+                            <span class="matrix-cell" id="m11">1.000</span>
+                            <span class="matrix-cell" id="m12">0.000</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-cell" id="m20">0.000</span>
+                            <span class="matrix-cell" id="m21">0.000</span>
+                            <span class="matrix-cell" id="m22">1.000</span>
+                        </div>
+                    </div>
+                    <span class="bracket">]</span>
+                </div>
+
+                <div class="gimbal-warning" id="gimbal-warning">
+                    <span class="gimbal-warning-icon">&#x26A0;</span>
+                    <span class="gimbal-warning-text">Gimbal Lock! Pitch at ±90° causes loss of one degree of freedom.</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+            <div class="axis-legend">
+                <div class="axis-legend-item">
+                    <div class="axis-color axis-x"></div>
+                    <span>X (Roll)</span>
+                </div>
+                <div class="axis-legend-item">
+                    <div class="axis-color axis-y"></div>
+                    <span>Y (Pitch)</span>
+                </div>
+                <div class="axis-legend-item">
+                    <div class="axis-color axis-z"></div>
+                    <span>Z (Yaw)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // DOM Elements
+        const canvas = document.getElementById('canvas');
+        const yawSlider = document.getElementById('yaw');
+        const pitchSlider = document.getElementById('pitch');
+        const rollSlider = document.getElementById('roll');
+        const yawValue = document.getElementById('yaw-value');
+        const pitchValue = document.getElementById('pitch-value');
+        const rollValue = document.getElementById('roll-value');
+        const resetBtn = document.getElementById('reset-btn');
+        const gimbalWarning = document.getElementById('gimbal-warning');
+
+        // Three.js setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0d1b2a);
+
+        const camera = new THREE.PerspectiveCamera(
+            50,
+            canvas.clientWidth / canvas.clientHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(4, 3, 4);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        // OrbitControls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 2;
+        controls.maxDistance = 15;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        // Colors
+        const colors = {
+            x: 0xff6b6b,  // Red
+            y: 0x4ecdc4,  // Green/Cyan
+            z: 0x5b8dee   // Blue
+        };
+
+        // Create arrow helper for axis
+        function createAxis(dir, color, length = 2) {
+            const arrow = new THREE.ArrowHelper(
+                dir.normalize(),
+                new THREE.Vector3(0, 0, 0),
+                length,
+                color,
+                0.3,
+                0.15
+            );
+            return arrow;
+        }
+
+        // Create coordinate frame group
+        function createCoordinateFrame(opacity = 1) {
+            const group = new THREE.Group();
+
+            const xAxis = createAxis(new THREE.Vector3(1, 0, 0), colors.x);
+            const yAxis = createAxis(new THREE.Vector3(0, 1, 0), colors.y);
+            const zAxis = createAxis(new THREE.Vector3(0, 0, 1), colors.z);
+
+            if (opacity < 1) {
+                [xAxis, yAxis, zAxis].forEach(arrow => {
+                    arrow.line.material.transparent = true;
+                    arrow.line.material.opacity = opacity;
+                    arrow.cone.material.transparent = true;
+                    arrow.cone.material.opacity = opacity;
+                });
+            }
+
+            group.add(xAxis, yAxis, zAxis);
+            return group;
+        }
+
+        // Reference frame (semi-transparent, static)
+        const referenceFrame = createCoordinateFrame(0.2);
+        scene.add(referenceFrame);
+
+        // Rotating frame
+        const rotatingFrame = createCoordinateFrame(1);
+        scene.add(rotatingFrame);
+
+        // Grid helper
+        const gridHelper = new THREE.GridHelper(6, 12, 0x333355, 0x222244);
+        gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane
+        scene.add(gridHelper);
+
+        // Euler to rotation matrix (ported from Python)
+        // Convention: Tait-Bryan Z-Y-X (yaw-pitch-roll), intrinsic, active
+        function eulerToMatrix(roll, pitch, yaw) {
+            const cu = Math.cos(roll), su = Math.sin(roll);
+            const cv = Math.cos(pitch), sv = Math.sin(pitch);
+            const cw = Math.cos(yaw), sw = Math.sin(yaw);
+
+            return [
+                [cv*cw, su*sv*cw - cu*sw, su*sw + cu*sv*cw],
+                [cv*sw, cu*cw + su*sv*sw, cu*sv*sw - su*cw],
+                [-sv,   su*cv,            cu*cv           ]
+            ];
+        }
+
+        // Check for gimbal lock
+        function isGimbalLocked(pitchDeg, tolerance = 1) {
+            return Math.abs(Math.abs(pitchDeg) - 90) < tolerance;
+        }
+
+        // Convert degrees to radians
+        function degToRad(deg) {
+            return deg * Math.PI / 180;
+        }
+
+        // Format number for display
+        function formatNumber(n) {
+            return n.toFixed(3).replace(/^-0\.000$/, '0.000');
+        }
+
+        // Update rotation matrix display
+        function updateMatrixDisplay(matrix) {
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    const cell = document.getElementById(`m${i}${j}`);
+                    cell.textContent = formatNumber(matrix[i][j]);
+                }
+            }
+        }
+
+        // Update visualization
+        function updateVisualization() {
+            const yawDeg = parseFloat(yawSlider.value);
+            const pitchDeg = parseFloat(pitchSlider.value);
+            const rollDeg = parseFloat(rollSlider.value);
+
+            // Update value displays
+            yawValue.textContent = `${yawDeg.toFixed(1)}°`;
+            pitchValue.textContent = `${pitchDeg.toFixed(1)}°`;
+            rollValue.textContent = `${rollDeg.toFixed(1)}°`;
+
+            // Convert to radians
+            const yaw = degToRad(yawDeg);
+            const pitch = degToRad(pitchDeg);
+            const roll = degToRad(rollDeg);
+
+            // Calculate and display rotation matrix
+            const matrix = eulerToMatrix(roll, pitch, yaw);
+            updateMatrixDisplay(matrix);
+
+            // Apply rotation to Three.js object
+            // Three.js Euler uses intrinsic rotations, 'ZYX' order means Z first, then Y, then X
+            rotatingFrame.rotation.set(roll, pitch, yaw, 'ZYX');
+
+            // Check for gimbal lock
+            if (isGimbalLocked(pitchDeg)) {
+                gimbalWarning.classList.add('visible');
+            } else {
+                gimbalWarning.classList.remove('visible');
+            }
+        }
+
+        // Event listeners
+        yawSlider.addEventListener('input', updateVisualization);
+        pitchSlider.addEventListener('input', updateVisualization);
+        rollSlider.addEventListener('input', updateVisualization);
+
+        resetBtn.addEventListener('click', () => {
+            yawSlider.value = 0;
+            pitchSlider.value = 0;
+            rollSlider.value = 0;
+            updateVisualization();
+        });
+
+        // Handle window resize
+        function onWindowResize() {
+            const container = canvas.parentElement;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Initialize
+        updateVisualization();
+        onWindowResize();
+        animate();
+    </script>
+</body>
+</html>
