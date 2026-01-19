@@ -125,6 +125,14 @@
         .pitch-slider::-webkit-slider-thumb { background: #4ecdc4; }
         .roll-slider::-webkit-slider-thumb { background: #ff6b6b; }
 
+        .sensor-yaw-slider::-webkit-slider-thumb { background: #a55eea; }
+        .sensor-pitch-slider::-webkit-slider-thumb { background: #ff9f43; }
+        .sensor-roll-slider::-webkit-slider-thumb { background: #26de81; }
+
+        .sensor-yaw-slider::-moz-range-thumb { background: #a55eea; border: none; }
+        .sensor-pitch-slider::-moz-range-thumb { background: #ff9f43; border: none; }
+        .sensor-roll-slider::-moz-range-thumb { background: #26de81; border: none; }
+
         .matrix-display {
             font-family: 'Monaco', 'Consolas', monospace;
             font-size: 0.8rem;
@@ -223,6 +231,22 @@
         .axis-y { background: #4ecdc4; }
         .axis-z { background: #5b8dee; }
 
+        .sensor-axis-x { background: #ff9f43; }
+        .sensor-axis-y { background: #a55eea; }
+        .sensor-axis-z { background: #26de81; }
+
+        .legend-section-title {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            color: #666;
+            margin-top: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .legend-section-title:first-child {
+            margin-top: 0;
+        }
+
         .reset-btn {
             background: #0f3460;
             border: 1px solid #1a4b8c;
@@ -280,12 +304,42 @@
                     <input type="range" id="roll" class="roll-slider" min="-180" max="180" value="0" step="0.1">
                 </div>
 
-                <button class="reset-btn" id="reset-btn">Reset to Origin</button>
+                <button class="reset-btn" id="reset-btn">Reset Platform</button>
                 <p class="info-text">Drag canvas to orbit camera</p>
             </div>
 
             <div class="panel">
-                <h2>Rotation Matrix</h2>
+                <h2>Sensor Orientation</h2>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Sensor Yaw (Z)</span>
+                        <span class="slider-value" id="sensor-yaw-value">0.0°</span>
+                    </div>
+                    <input type="range" id="sensor-yaw" class="sensor-yaw-slider" min="-180" max="180" value="0" step="0.1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Sensor Pitch (Y)</span>
+                        <span class="slider-value" id="sensor-pitch-value">0.0°</span>
+                    </div>
+                    <input type="range" id="sensor-pitch" class="sensor-pitch-slider" min="-90" max="90" value="0" step="0.1">
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label">
+                        <span>Sensor Roll (X)</span>
+                        <span class="slider-value" id="sensor-roll-value">0.0°</span>
+                    </div>
+                    <input type="range" id="sensor-roll" class="sensor-roll-slider" min="-180" max="180" value="0" step="0.1">
+                </div>
+
+                <button class="reset-btn" id="reset-sensor-btn">Reset Sensor</button>
+            </div>
+
+            <div class="panel">
+                <h2>Platform Rotation Matrix</h2>
                 <div class="matrix-brackets">
                     <span class="bracket">[</span>
                     <div class="matrix-display" id="matrix-display">
@@ -313,11 +367,37 @@
                     <span class="gimbal-warning-text">Gimbal Lock! Pitch at ±90° causes loss of one degree of freedom.</span>
                 </div>
             </div>
+
+            <div class="panel">
+                <h2>Platform to Sensor Matrix</h2>
+                <div class="matrix-brackets">
+                    <span class="bracket">[</span>
+                    <div class="matrix-display" id="sensor-matrix-display">
+                        <div class="matrix-row">
+                            <span class="matrix-cell" id="sm00">1.000</span>
+                            <span class="matrix-cell" id="sm01">0.000</span>
+                            <span class="matrix-cell" id="sm02">0.000</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-cell" id="sm10">0.000</span>
+                            <span class="matrix-cell" id="sm11">1.000</span>
+                            <span class="matrix-cell" id="sm12">0.000</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-cell" id="sm20">0.000</span>
+                            <span class="matrix-cell" id="sm21">0.000</span>
+                            <span class="matrix-cell" id="sm22">1.000</span>
+                        </div>
+                    </div>
+                    <span class="bracket">]</span>
+                </div>
+            </div>
         </div>
 
         <div class="canvas-container">
             <canvas id="canvas"></canvas>
             <div class="axis-legend">
+                <div class="legend-section-title">Platform</div>
                 <div class="axis-legend-item">
                     <div class="axis-color axis-x"></div>
                     <span>X North (Roll)</span>
@@ -329,6 +409,19 @@
                 <div class="axis-legend-item">
                     <div class="axis-color axis-z"></div>
                     <span>Z Down (Yaw)</span>
+                </div>
+                <div class="legend-section-title">Sensor</div>
+                <div class="axis-legend-item">
+                    <div class="axis-color sensor-axis-x"></div>
+                    <span>Sensor X</span>
+                </div>
+                <div class="axis-legend-item">
+                    <div class="axis-color sensor-axis-y"></div>
+                    <span>Sensor Y</span>
+                </div>
+                <div class="axis-legend-item">
+                    <div class="axis-color sensor-axis-z"></div>
+                    <span>Sensor Z</span>
                 </div>
             </div>
         </div>
@@ -347,7 +440,7 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // DOM Elements
+        // DOM Elements - Platform
         const canvas = document.getElementById('canvas');
         const yawSlider = document.getElementById('yaw');
         const pitchSlider = document.getElementById('pitch');
@@ -357,6 +450,15 @@
         const rollValue = document.getElementById('roll-value');
         const resetBtn = document.getElementById('reset-btn');
         const gimbalWarning = document.getElementById('gimbal-warning');
+
+        // DOM Elements - Sensor
+        const sensorYawSlider = document.getElementById('sensor-yaw');
+        const sensorPitchSlider = document.getElementById('sensor-pitch');
+        const sensorRollSlider = document.getElementById('sensor-roll');
+        const sensorYawValue = document.getElementById('sensor-yaw-value');
+        const sensorPitchValue = document.getElementById('sensor-pitch-value');
+        const sensorRollValue = document.getElementById('sensor-roll-value');
+        const resetSensorBtn = document.getElementById('reset-sensor-btn');
 
         // Three.js setup
         const scene = new THREE.Scene();
@@ -391,11 +493,18 @@
         directionalLight.position.set(5, 5, 5);
         scene.add(directionalLight);
 
-        // Colors
+        // Colors - Platform
         const colors = {
             x: 0xff6b6b,  // Red - X/North
             y: 0x4ecdc4,  // Cyan - Y/East
             z: 0x5b8dee   // Blue - Z/Down
+        };
+
+        // Colors - Sensor
+        const sensorColors = {
+            x: 0xff9f43,  // Orange - Sensor X
+            y: 0xa55eea,  // Purple - Sensor Y
+            z: 0x26de81   // Lime - Sensor Z
         };
 
         // NED to Three.js coordinate transform
@@ -461,13 +570,39 @@
             return group;
         }
 
+        // Create sensor coordinate frame with distinct colors
+        function createSensorFrame(opacity = 1) {
+            const group = new THREE.Group();
+
+            // Sensor axes mapped to Three.js display coordinates (same mapping as NED)
+            const xAxis = createAxis(new THREE.Vector3(0, 0, -1), sensorColors.x);
+            const yAxis = createAxis(new THREE.Vector3(1, 0, 0), sensorColors.y);
+            const zAxis = createAxis(new THREE.Vector3(0, -1, 0), sensorColors.z);
+
+            if (opacity < 1) {
+                [xAxis, yAxis, zAxis].forEach(arrow => {
+                    arrow.line.material.transparent = true;
+                    arrow.line.material.opacity = opacity;
+                    arrow.cone.material.transparent = true;
+                    arrow.cone.material.opacity = opacity;
+                });
+            }
+
+            group.add(xAxis, yAxis, zAxis);
+            return group;
+        }
+
         // Reference frame (semi-transparent, static) - shows NED orientation
         const referenceFrame = createNEDFrame(0.25);
         scene.add(referenceFrame);
 
-        // Rotating frame - will be updated with rotation matrix
+        // Platform rotating frame - will be updated with rotation matrix
         const rotatingFrame = createNEDFrame(1);
         scene.add(rotatingFrame);
+
+        // Sensor frame - rotates with platform plus its own relative rotation
+        const sensorFrame = createSensorFrame(1);
+        scene.add(sensorFrame);
 
         // Grid helper - horizontal plane (XY in NED = ground)
         const gridHelper = new THREE.GridHelper(6, 12, 0x333355, 0x222244);
@@ -516,7 +651,7 @@
             return n.toFixed(3).replace(/^-0\.000$/, '0.000');
         }
 
-        // Update rotation matrix display
+        // Update platform rotation matrix display
         function updateMatrixDisplay(matrix) {
             for (let i = 0; i < 3; i++) {
                 for (let j = 0; j < 3; j++) {
@@ -526,40 +661,76 @@
             }
         }
 
+        // Update sensor rotation matrix display
+        function updateSensorMatrixDisplay(matrix) {
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    const cell = document.getElementById(`sm${i}${j}`);
+                    cell.textContent = formatNumber(matrix[i][j]);
+                }
+            }
+        }
+
         // Update visualization
         function updateVisualization() {
+            // Platform angles
             const yawDeg = parseFloat(yawSlider.value);
             const pitchDeg = parseFloat(pitchSlider.value);
             const rollDeg = parseFloat(rollSlider.value);
 
-            // Update value displays
+            // Sensor angles (relative to platform)
+            const sensorYawDeg = parseFloat(sensorYawSlider.value);
+            const sensorPitchDeg = parseFloat(sensorPitchSlider.value);
+            const sensorRollDeg = parseFloat(sensorRollSlider.value);
+
+            // Update platform value displays
             yawValue.textContent = `${yawDeg.toFixed(1)}°`;
             pitchValue.textContent = `${pitchDeg.toFixed(1)}°`;
             rollValue.textContent = `${rollDeg.toFixed(1)}°`;
 
-            // Convert to radians
+            // Update sensor value displays
+            sensorYawValue.textContent = `${sensorYawDeg.toFixed(1)}°`;
+            sensorPitchValue.textContent = `${sensorPitchDeg.toFixed(1)}°`;
+            sensorRollValue.textContent = `${sensorRollDeg.toFixed(1)}°`;
+
+            // Convert platform angles to radians
             const yaw = degToRad(yawDeg);
             const pitch = degToRad(pitchDeg);
             const roll = degToRad(rollDeg);
 
-            // Calculate rotation matrix in NED frame
-            const R_ned = eulerToMatrix(roll, pitch, yaw);
-            updateMatrixDisplay(R_ned);
+            // Convert sensor angles to radians
+            const sensorYaw = degToRad(sensorYawDeg);
+            const sensorPitch = degToRad(sensorPitchDeg);
+            const sensorRoll = degToRad(sensorRollDeg);
 
-            // Transform rotation to Three.js display coordinates
-            // R_visual = T * R_ned * T^(-1) for proper coordinate transformation
-            // But since we drew the frame in NED-mapped coords, we apply R_ned directly
-            // transformed through the coordinate mapping
+            // Calculate platform rotation matrix in NED frame
+            const R_platform = eulerToMatrix(roll, pitch, yaw);
+            updateMatrixDisplay(R_platform);
+
+            // Calculate sensor-relative rotation matrix (platform to sensor)
+            const R_sensor_rel = eulerToMatrix(sensorRoll, sensorPitch, sensorYaw);
+            updateSensorMatrixDisplay(R_sensor_rel);
+
+            // Calculate combined sensor world rotation: R_sensor_world = R_platform * R_sensor_rel
+            const R_sensor_world = matmul3(R_platform, R_sensor_rel);
+
+            // Transform rotations to Three.js display coordinates
             const T = T_ned_to_tjs;
             const T_inv = [
                 [0, 0, -1],
                 [1, 0,  0],
                 [0, -1, 0]
             ];
-            const R_visual = matmul3(matmul3(T, R_ned), T_inv);
-            applyRotationMatrix(rotatingFrame, R_visual);
 
-            // Check for gimbal lock
+            // Platform visual rotation
+            const R_platform_visual = matmul3(matmul3(T, R_platform), T_inv);
+            applyRotationMatrix(rotatingFrame, R_platform_visual);
+
+            // Sensor visual rotation (combined world rotation)
+            const R_sensor_visual = matmul3(matmul3(T, R_sensor_world), T_inv);
+            applyRotationMatrix(sensorFrame, R_sensor_visual);
+
+            // Check for gimbal lock (platform)
             if (isGimbalLocked(pitchDeg)) {
                 gimbalWarning.classList.add('visible');
             } else {
@@ -567,7 +738,7 @@
             }
         }
 
-        // Event listeners
+        // Event listeners - Platform
         yawSlider.addEventListener('input', updateVisualization);
         pitchSlider.addEventListener('input', updateVisualization);
         rollSlider.addEventListener('input', updateVisualization);
@@ -576,6 +747,18 @@
             yawSlider.value = 0;
             pitchSlider.value = 0;
             rollSlider.value = 0;
+            updateVisualization();
+        });
+
+        // Event listeners - Sensor
+        sensorYawSlider.addEventListener('input', updateVisualization);
+        sensorPitchSlider.addEventListener('input', updateVisualization);
+        sensorRollSlider.addEventListener('input', updateVisualization);
+
+        resetSensorBtn.addEventListener('click', () => {
+            sensorYawSlider.value = 0;
+            sensorPitchSlider.value = 0;
+            sensorRollSlider.value = 0;
             updateVisualization();
         });
 
