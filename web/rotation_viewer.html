@@ -174,6 +174,24 @@
             color: #7ec8e3;
             min-width: 60px;
             text-align: right;
+            cursor: pointer;
+        }
+
+        .slider-value:hover {
+            text-decoration: underline;
+        }
+
+        .slider-value-input {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.875rem;
+            color: #7ec8e3;
+            width: 60px;
+            text-align: right;
+            background: #0f3460;
+            border: 1px solid #7ec8e3;
+            border-radius: 3px;
+            padding: 0 4px;
+            outline: none;
         }
 
         input[type="range"] {
@@ -843,6 +861,121 @@
         const coordElevation = document.getElementById('coord-elevation');
         const coordRange = document.getElementById('coord-range');
         const coordInFov = document.getElementById('coord-in-fov');
+
+        // Slider configuration for editable values
+        const sliderConfig = {
+            'yaw-value': { slider: yawSlider, hasDegree: true, update: () => updateVisualization() },
+            'pitch-value': { slider: pitchSlider, hasDegree: true, update: () => updateVisualization() },
+            'roll-value': { slider: rollSlider, hasDegree: true, update: () => updateVisualization() },
+            'sensor-yaw-value': { slider: sensorYawSlider, hasDegree: true, update: () => updateVisualization() },
+            'sensor-pitch-value': { slider: sensorPitchSlider, hasDegree: true, update: () => updateVisualization() },
+            'sensor-roll-value': { slider: sensorRollSlider, hasDegree: true, update: () => updateVisualization() },
+            'fov-az-min-value': { slider: fovAzMinSlider, hasDegree: true, update: () => { updateFOV(); updateWorldPoint(); } },
+            'fov-az-max-value': { slider: fovAzMaxSlider, hasDegree: true, update: () => { updateFOV(); updateWorldPoint(); } },
+            'fov-el-min-value': { slider: fovElMinSlider, hasDegree: true, update: () => { updateFOV(); updateWorldPoint(); } },
+            'fov-el-max-value': { slider: fovElMaxSlider, hasDegree: true, update: () => { updateFOV(); updateWorldPoint(); } },
+            'fov-range-value': { slider: fovRangeSlider, hasDegree: false, update: () => { updateFOV(); updateWorldPoint(); } },
+            'point-x-value': { slider: pointXSlider, hasDegree: false, update: () => updateWorldPoint() },
+            'point-y-value': { slider: pointYSlider, hasDegree: false, update: () => updateWorldPoint() },
+            'point-z-value': { slider: pointZSlider, hasDegree: false, update: () => updateWorldPoint() }
+        };
+
+        // Make a slider value editable on click
+        function makeValueEditable(valueElement) {
+            const config = sliderConfig[valueElement.id];
+            if (!config) return;
+
+            const currentText = valueElement.textContent;
+            const currentValue = config.hasDegree
+                ? currentText.replace('°', '')
+                : currentText;
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'slider-value-input';
+            input.value = currentValue;
+            input.dataset.originalValue = currentValue;
+            input.dataset.valueId = valueElement.id;
+
+            valueElement.replaceWith(input);
+            input.select();
+            input.focus();
+
+            // Handle commit on blur or Enter
+            input.addEventListener('blur', () => commitValueEdit(input));
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelValueEdit(input);
+                }
+            });
+        }
+
+        // Commit the edited value
+        function commitValueEdit(input) {
+            const valueId = input.dataset.valueId;
+            const config = sliderConfig[valueId];
+            if (!config) return;
+
+            let newValue = parseFloat(input.value);
+            if (isNaN(newValue)) {
+                newValue = parseFloat(input.dataset.originalValue);
+            }
+
+            // Clamp to slider min/max
+            const min = parseFloat(config.slider.min);
+            const max = parseFloat(config.slider.max);
+            newValue = Math.max(min, Math.min(max, newValue));
+
+            // Update slider
+            config.slider.value = newValue;
+
+            // Create new span
+            const span = document.createElement('span');
+            span.className = 'slider-value';
+            span.id = valueId;
+            span.textContent = config.hasDegree
+                ? `${newValue.toFixed(1)}°`
+                : newValue.toFixed(1);
+            span.addEventListener('click', () => makeValueEditable(span));
+
+            input.replaceWith(span);
+
+            // Trigger update
+            config.update();
+        }
+
+        // Cancel edit and restore original value
+        function cancelValueEdit(input) {
+            const valueId = input.dataset.valueId;
+            const config = sliderConfig[valueId];
+            if (!config) return;
+
+            const originalValue = input.dataset.originalValue;
+
+            const span = document.createElement('span');
+            span.className = 'slider-value';
+            span.id = valueId;
+            span.textContent = config.hasDegree
+                ? `${originalValue}°`
+                : originalValue;
+            span.addEventListener('click', () => makeValueEditable(span));
+
+            input.replaceWith(span);
+        }
+
+        // Initialize click handlers for all slider values
+        function initEditableSliderValues() {
+            Object.keys(sliderConfig).forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.addEventListener('click', () => makeValueEditable(element));
+                }
+            });
+        }
 
         // Three.js setup
         const scene = new THREE.Scene();
@@ -1594,6 +1727,7 @@
         }
 
         // Initialize
+        initEditableSliderValues();
         updateVisualization();
         updateFOV();
         updateWorldPoint();
